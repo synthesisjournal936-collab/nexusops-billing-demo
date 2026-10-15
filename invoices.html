@@ -23,6 +23,7 @@
             <option value="">All statuses</option>
             <option value="Draft">Draft</option>
             <option value="Sent">Sent</option>
+            <option value="Partially Paid">Partially Paid</option>
             <option value="Overdue">Overdue</option>
             <option value="Paid">Paid</option>
           </select>
@@ -32,7 +33,7 @@
           <thead>
             <tr>
               <th>Number</th><th>Customer</th><th>Issue date</th><th>Due date</th>
-              <th class="num">Total</th><th>Status</th><th>Actions</th>
+              <th class="num">Total</th><th class="num">Balance</th><th>Status</th><th>Actions</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -81,6 +82,36 @@
     </form>
   </dialog>
 
+  <dialog id="payment-dialog" aria-labelledby="payment-dialog-title">
+    <h2 id="payment-dialog-title">Record payment</h2>
+    <p class="muted" id="payment-summary"></p>
+    <form id="payment-form" novalidate>
+      <div class="row">
+        <div class="field">
+          <label for="payment-amount">Amount</label>
+          <input id="payment-amount" name="amount" type="number" step="0.01" min="0">
+        </div>
+        <div class="field">
+          <label for="payment-method">Method</label>
+          <select id="payment-method" name="method">
+            <option>Bank transfer</option>
+            <option>Card</option>
+            <option>Cash</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="payment-date">Payment date</label>
+        <input id="payment-date" name="date" type="date">
+      </div>
+      <p id="payment-error" class="form-error" role="alert"></p>
+      <div class="dialog-actions">
+        <button type="button" class="btn" id="payment-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="payment-save">Save payment</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="assets/js/app.js"></script>
   <script>
     (function () {
@@ -101,6 +132,12 @@
       function invoices() { return NX.read(NX.KEYS.invoices, []); }
       function saveInvoices(list) { NX.write(NX.KEYS.invoices, list); }
 
+      function paidSoFar(inv) {
+        if (inv.status === 'Paid') return inv.total;
+        return NX.round2((inv.payments || []).reduce(function (s, p) { return s + p.amount; }, 0));
+      }
+      function balanceOf(inv) { return NX.round2(inv.total - paidSoFar(inv)); }
+
       function calc(lines, taxRate) {
         var subtotal = NX.round2(lines.reduce(function (s, l) { return s + l.qty * l.rate; }, 0));
         var tax = NX.round2(subtotal * taxRate / 100);
@@ -113,8 +150,8 @@
         if (status === 'Draft') {
           out += '<button type="button" class="btn btn-sm" data-action="send">Send</button>';
           out += '<button type="button" class="btn btn-sm btn-danger" data-action="delete">Delete</button>';
-        } else if (status === 'Sent' || status === 'Overdue') {
-          out += '<button type="button" class="btn btn-sm" data-action="pay">Mark as paid</button>';
+        } else if (status === 'Sent' || status === 'Overdue' || status === 'Partially Paid') {
+          out += '<button type="button" class="btn btn-sm" data-action="pay">Record payment</button>';
         } else {
           out = '<span class="muted">-</span>';
         }
@@ -132,7 +169,7 @@
           return (!wanted || status === wanted) && (!q || text.indexOf(q) !== -1);
         });
         if (!rows.length) {
-          body.innerHTML = '<tr><td colspan="7" class="empty">No invoices found</td></tr>';
+          body.innerHTML = '<tr><td colspan="8" class="empty">No invoices found</td></tr>';
           return;
         }
         body.innerHTML = rows.map(function (i) {
@@ -143,6 +180,7 @@
             '<td>' + NX.esc(i.issueDate) + '</td>' +
             '<td>' + NX.esc(i.dueDate) + '</td>' +
             '<td class="num">' + NX.money(i.total) + '</td>' +
+            '<td class="num">' + NX.money(balanceOf(i)) + '</td>' +
             '<td>' + NX.badge(status) + '</td>' +
             '<td>' + actionsFor(i, status) + '</td></tr>';
         }).join('');
@@ -275,14 +313,7 @@
           NX.toast('Invoice ' + id + ' sent');
           render();
         } else if (action === 'pay') {
-          NX.confirm('Mark invoice ' + id + ' as paid?', 'Mark as paid').then(function (ok) {
-            if (!ok) return;
-            inv.status = 'Paid';
-            inv.paidDate = NX.today();
-            saveInvoices(list);
-            NX.toast('Invoice ' + id + ' marked as paid');
-            render();
-          });
+          openPayment(inv);
         } else if (action === 'delete') {
           NX.confirm('Delete draft invoice ' + id + '?', 'Delete').then(function (ok) {
             if (!ok) return;
@@ -291,6 +322,53 @@
             render();
           });
         }
+      });
+
+      /* ---------- record payment ---------- */
+      var payDialog = document.getElementById('payment-dialog');
+      var payForm = document.getElementById('payment-form');
+      var payAmount = document.getElementById('payment-amount');
+      var payDate = document.getElementById('payment-date');
+      var payMethod = document.getElementById('payment-method');
+      var payError = document.getElementById('payment-error');
+      var payingId = null;
+
+      function openPayment(inv) {
+        payingId = inv.id;
+        document.getElementById('payment-summary').textContent =
+          'Invoice ' + inv.id + ' - total ' + NX.money(inv.total) + ', balance ' + NX.money(balanceOf(inv));
+        payAmount.value = balanceOf(inv);
+        payDate.value = NX.today();
+        payError.textContent = '';
+        payDialog.showModal();
+      }
+      document.getElementById('payment-cancel').addEventListener('click', function () { payDialog.close(); });
+
+      payForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        payError.textContent = '';
+        var list = invoices();
+        var inv = list.filter(function (i) { return i.id === payingId; })[0];
+        if (!inv) return;
+        var amount = Number(payAmount.value);
+        var balance = balanceOf(inv);
+        if (payAmount.value === '' || !isFinite(amount) || amount <= 0) { payError.textContent = 'Enter a payment amount greater than 0'; return; }
+        if (amount > balance) { payError.textContent = 'Payment cannot exceed the balance of ' + NX.money(balance); return; }
+        if (!payDate.value) { payError.textContent = 'Payment date is required'; return; }
+
+        inv.payments = inv.payments || [];
+        inv.payments.push({ amount: NX.round2(amount), method: payMethod.value, date: payDate.value });
+        if (balanceOf(inv) <= 0) {
+          inv.status = 'Paid';
+          inv.paidDate = payDate.value;
+          NX.toast('Invoice ' + inv.id + ' paid in full');
+        } else {
+          inv.status = 'Partially Paid';
+          NX.toast('Payment recorded for ' + inv.id);
+        }
+        saveInvoices(list);
+        payDialog.close();
+        render();
       });
 
       search.addEventListener('input', render);
