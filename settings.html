@@ -15,7 +15,7 @@
         <div class="page-head"><h1>Settings</h1></div>
 
         <section class="panel">
-          <h2>Company</h2>
+          <h2>Company profile</h2>
           <form id="settings-form" novalidate>
             <div class="field">
               <label for="company-name">Company name</label>
@@ -38,8 +38,8 @@
                 </select>
               </div>
             </div>
-            <p class="muted">The tax rate is applied to new invoices. Existing invoices keep the rate they were created with.</p>
-            <button type="submit" class="btn btn-primary" id="save-settings">Save settings</button>
+            <p class="muted">Tax is added to every new invoice. Invoices you already created keep their original tax rate.</p>
+            <button type="submit" class="btn btn-primary" id="save-settings">Save changes</button>
           </form>
         </section>
 
@@ -84,7 +84,7 @@
         }
         if (bad) return;
         NX.write(NX.KEYS.settings, { company: company, taxRate: tax, currency: currencyEl.value });
-        NX.toast('Settings saved');
+        NX.toast('Changes saved');
         NX.mountShell('settings');
       });
 
