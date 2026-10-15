@@ -160,7 +160,7 @@
   var NAV = [
     ['dashboard', 'Dashboard', 'dashboard.html'],
     ['customers', 'Customers', 'customers.html'],
-    ['invoices', 'Invoices', 'invoices.html'],
+    ['invoices', 'Billing', 'invoices.html'],
     ['settings', 'Settings', 'settings.html']
   ];
   function mountShell(active) {
