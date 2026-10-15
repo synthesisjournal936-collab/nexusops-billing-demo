@@ -14,16 +14,16 @@
       <main class="content">
         <div class="page-head">
           <h1>Customers</h1>
-          <button type="button" class="btn btn-primary" id="add-customer-btn">Add Customer</button>
+          <button type="button" class="btn btn-primary" id="add-customer-btn">New Customer</button>
         </div>
 
         <div class="toolbar">
-          <input type="search" id="customer-search" placeholder="Search customers" aria-label="Search customers">
+          <input type="search" id="customer-search" placeholder="Search by name or email" aria-label="Search customers">
         </div>
 
         <table id="customer-table">
           <thead>
-            <tr><th>Name</th><th>Email</th><th>Phone</th><th class="num">Invoices</th><th>Actions</th></tr>
+            <tr><th>Name</th><th>Email</th><th>Phone number</th><th class="num">Invoices</th><th>Actions</th></tr>
           </thead>
           <tbody></tbody>
         </table>
@@ -32,12 +32,12 @@
   </div>
 
   <dialog id="customer-dialog" aria-labelledby="customer-dialog-title">
-    <h2 id="customer-dialog-title">Add customer</h2>
+    <h2 id="customer-dialog-title">New customer</h2>
     <form id="customer-form" novalidate>
       <div class="field">
-        <label for="customer-name">Customer name</label>
-        <input id="customer-name" name="name" type="text" autocomplete="off">
-        <span class="field-error" id="customer-name-error" role="alert"></span>
+        <label for="customer-fullname">Full name</label>
+        <input id="customer-fullname" name="name" type="text" autocomplete="off">
+        <span class="field-error" id="customer-fullname-error" role="alert"></span>
       </div>
       <div class="field">
         <label for="customer-email">Email</label>
@@ -62,10 +62,10 @@
 
       var dialog = document.getElementById('customer-dialog');
       var form = document.getElementById('customer-form');
-      var nameEl = document.getElementById('customer-name');
+      var nameEl = document.getElementById('customer-fullname');
       var emailEl = document.getElementById('customer-email');
       var phoneEl = document.getElementById('customer-phone');
-      var nameErr = document.getElementById('customer-name-error');
+      var nameErr = document.getElementById('customer-fullname-error');
       var emailErr = document.getElementById('customer-email-error');
       var title = document.getElementById('customer-dialog-title');
       var search = document.getElementById('customer-search');
@@ -101,7 +101,7 @@
 
       function openDialog(customer) {
         editingId = customer ? customer.id : null;
-        title.textContent = customer ? 'Edit customer' : 'Add customer';
+        title.textContent = customer ? 'Edit customer' : 'New customer';
         nameEl.value = customer ? customer.name : '';
         emailEl.value = customer ? customer.email : '';
         phoneEl.value = customer ? (customer.phone || '') : '';
@@ -122,7 +122,7 @@
         var phone = phoneEl.value.trim();
         var bad = false;
 
-        if (!name) { nameErr.textContent = 'Customer name is required'; bad = true; }
+        if (!name) { nameErr.textContent = 'Please enter a name'; bad = true; }
         if (!email) { emailErr.textContent = 'Email is required'; bad = true; }
         else if (!NX.EMAIL_RE.test(email)) { emailErr.textContent = 'Enter a valid email address'; bad = true; }
         else if (customers().some(function (c) { return c.email.toLowerCase() === email.toLowerCase() && c.id !== editingId; })) {
