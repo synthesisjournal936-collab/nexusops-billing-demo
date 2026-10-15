@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Settings - NexusOps Billing</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main">
+      <header class="topbar" id="topbar"></header>
+      <main class="content">
+        <div class="page-head"><h1>Settings</h1></div>
+
+        <section class="panel">
+          <h2>Company</h2>
+          <form id="settings-form" novalidate>
+            <div class="field">
+              <label for="company-name">Company name</label>
+              <input id="company-name" name="company" type="text">
+              <span class="field-error" id="company-error" role="alert"></span>
+            </div>
+            <div class="row">
+              <div class="field">
+                <label for="tax-rate">Tax rate (%)</label>
+                <input id="tax-rate" name="taxRate" type="number" step="0.01">
+                <span class="field-error" id="tax-error" role="alert"></span>
+              </div>
+              <div class="field">
+                <label for="currency">Currency</label>
+                <select id="currency" name="currency">
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                  <option value="GBP">GBP</option>
+                  <option value="INR">INR</option>
+                </select>
+              </div>
+            </div>
+            <p class="muted">The tax rate is applied to new invoices. Existing invoices keep the rate they were created with.</p>
+            <button type="submit" class="btn btn-primary" id="save-settings">Save settings</button>
+          </form>
+        </section>
+
+        <section class="panel">
+          <h2>Demo data</h2>
+          <p class="muted">Restore the sample customers and invoices. This removes everything you added.</p>
+          <button type="button" class="btn btn-danger" id="reset-data">Reset demo data</button>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="assets/js/app.js"></script>
+  <script>
+    (function () {
+      if (!NX.mountShell('settings')) return;
+
+      var form = document.getElementById('settings-form');
+      var companyEl = document.getElementById('company-name');
+      var taxEl = document.getElementById('tax-rate');
+      var currencyEl = document.getElementById('currency');
+      var companyErr = document.getElementById('company-error');
+      var taxErr = document.getElementById('tax-error');
+
+      function load() {
+        var s = NX.getSettings();
+        companyEl.value = s.company;
+        taxEl.value = s.taxRate;
+        currencyEl.value = s.currency;
+      }
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        companyErr.textContent = ''; taxErr.textContent = '';
+        var company = companyEl.value.trim();
+        var raw = taxEl.value.trim();
+        var tax = Number(raw);
+        var bad = false;
+        if (!company) { companyErr.textContent = 'Company name is required'; bad = true; }
+        if (raw === '' || isNaN(tax) || tax < 0 || tax > 100) {
+          taxErr.textContent = 'Tax rate must be between 0 and 100'; bad = true;
+        }
+        if (bad) return;
+        NX.write(NX.KEYS.settings, { company: company, taxRate: tax, currency: currencyEl.value });
+        NX.toast('Settings saved');
+        NX.mountShell('settings');
+      });
+
+      document.getElementById('reset-data').addEventListener('click', function () {
+        NX.confirm('Reset all demo data? Customers and invoices you added will be removed.', 'Reset').then(function (ok) {
+          if (!ok) return;
+          NX.resetDemoData();
+          load();
+          NX.toast('Demo data reset');
+        });
+      });
+
+      load();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Invoices - NexusOps Billing</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main">
+      <header class="topbar" id="topbar"></header>
+      <main class="content">
+        <div class="page-head">
+          <h1>Invoices</h1>
+          <button type="button" class="btn btn-primary" id="create-invoice-btn">Create Invoice</button>
+        </div>
+
+        <div class="toolbar">
+          <input type="search" id="invoice-search" placeholder="Search invoices" aria-label="Search invoices">
+          <select id="status-filter" aria-label="Filter by status">
+            <option value="">All statuses</option>
+            <option value="Draft">Draft</option>
+            <option value="Sent">Sent</option>
+            <option value="Overdue">Overdue</option>
+            <option value="Paid">Paid</option>
+          </select>
+        </div>
+
+        <table id="invoice-table">
+          <thead>
+            <tr>
+              <th>Number</th><th>Customer</th><th>Issue date</th><th>Due date</th>
+              <th class="num">Total</th><th>Status</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </main>
+    </div>
+  </div>
+
+  <dialog id="invoice-dialog" aria-labelledby="invoice-dialog-title">
+    <h2 id="invoice-dialog-title">Create invoice</h2>
+    <form id="invoice-form" novalidate>
+      <div class="field">
+        <label for="invoice-customer">Customer</label>
+        <select id="invoice-customer" name="customer"></select>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="issue-date">Issue date</label>
+          <input id="issue-date" name="issueDate" type="date">
+        </div>
+        <div class="field">
+          <label for="due-date">Due date</label>
+          <input id="due-date" name="dueDate" type="date">
+        </div>
+      </div>
+
+      <table class="lines">
+        <thead>
+          <tr><th>Description</th><th style="width:90px">Qty</th><th style="width:120px">Rate</th><th class="num" style="width:110px">Amount</th><th style="width:80px"></th></tr>
+        </thead>
+        <tbody id="line-items"></tbody>
+      </table>
+      <p><button type="button" class="btn btn-sm" id="add-line-btn">Add line</button></p>
+
+      <div class="totals">
+        <div><span>Subtotal</span><span id="subtotal">$0.00</span></div>
+        <div><span id="tax-label">Tax</span><span id="tax-amount">$0.00</span></div>
+        <div class="grand"><span>Total</span><span id="total">$0.00</span></div>
+      </div>
+
+      <p id="invoice-error" class="form-error" role="alert"></p>
+      <div class="dialog-actions">
+        <button type="button" class="btn" id="invoice-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="invoice-save">Save as draft</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="assets/js/app.js"></script>
+  <script>
+    (function () {
+      if (!NX.mountShell('invoices')) return;
+
+      var dialog = document.getElementById('invoice-dialog');
+      var form = document.getElementById('invoice-form');
+      var customerEl = document.getElementById('invoice-customer');
+      var issueEl = document.getElementById('issue-date');
+      var dueEl = document.getElementById('due-date');
+      var linesEl = document.getElementById('line-items');
+      var errorEl = document.getElementById('invoice-error');
+      var search = document.getElementById('invoice-search');
+      var statusFilter = document.getElementById('status-filter');
+      var body = document.querySelector('#invoice-table tbody');
+
+      function customers() { return NX.read(NX.KEYS.customers, []); }
+      function invoices() { return NX.read(NX.KEYS.invoices, []); }
+      function saveInvoices(list) { NX.write(NX.KEYS.invoices, list); }
+
+      function calc(lines, taxRate) {
+        var subtotal = NX.round2(lines.reduce(function (s, l) { return s + l.qty * l.rate; }, 0));
+        var tax = NX.round2(subtotal * taxRate / 100);
+        return { subtotal: subtotal, tax: tax, total: NX.round2(subtotal + tax) };
+      }
+
+      /* ---------- table ---------- */
+      function actionsFor(inv, status) {
+        var out = '';
+        if (status === 'Draft') {
+          out += '<button type="button" class="btn btn-sm" data-action="send">Send</button>';
+          out += '<button type="button" class="btn btn-sm btn-danger" data-action="delete">Delete</button>';
+        } else if (status === 'Sent' || status === 'Overdue') {
+          out += '<button type="button" class="btn btn-sm" data-action="pay">Mark as paid</button>';
+        } else {
+          out = '<span class="muted">-</span>';
+        }
+        return '<div class="actions">' + out + '</div>';
+      }
+
+      function render() {
+        var names = {};
+        customers().forEach(function (c) { names[c.id] = c.name; });
+        var q = search.value.trim().toLowerCase();
+        var wanted = statusFilter.value;
+        var rows = invoices().slice().reverse().filter(function (i) {
+          var status = NX.effectiveStatus(i);
+          var text = (i.id + ' ' + (names[i.customerId] || '')).toLowerCase();
+          return (!wanted || status === wanted) && (!q || text.indexOf(q) !== -1);
+        });
+        if (!rows.length) {
+          body.innerHTML = '<tr><td colspan="7" class="empty">No invoices found</td></tr>';
+          return;
+        }
+        body.innerHTML = rows.map(function (i) {
+          var status = NX.effectiveStatus(i);
+          return '<tr data-id="' + NX.esc(i.id) + '">' +
+            '<td>' + NX.esc(i.id) + '</td>' +
+            '<td>' + NX.esc(names[i.customerId] || '-') + '</td>' +
+            '<td>' + NX.esc(i.issueDate) + '</td>' +
+            '<td>' + NX.esc(i.dueDate) + '</td>' +
+            '<td class="num">' + NX.money(i.total) + '</td>' +
+            '<td>' + NX.badge(status) + '</td>' +
+            '<td>' + actionsFor(i, status) + '</td></tr>';
+        }).join('');
+      }
+
+      /* ---------- create-invoice dialog ---------- */
+      function lineRow(line) {
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td><input type="text" class="line-desc" aria-label="Description" value="' + NX.esc(line ? line.description : '') + '"></td>' +
+          '<td><input type="number" class="line-qty" aria-label="Quantity" min="1" step="1" value="' + (line ? line.qty : 1) + '"></td>' +
+          '<td><input type="number" class="line-rate" aria-label="Rate" min="0" step="0.01" value="' + (line ? line.rate : '') + '"></td>' +
+          '<td class="num line-amount">$0.00</td>' +
+          '<td><button type="button" class="btn btn-sm line-remove" aria-label="Remove line">Remove</button></td>';
+        return tr;
+      }
+
+      function readLines() {
+        return Array.prototype.map.call(linesEl.querySelectorAll('tr'), function (tr) {
+          return {
+            description: tr.querySelector('.line-desc').value.trim(),
+            qtyRaw: tr.querySelector('.line-qty').value,
+            rateRaw: tr.querySelector('.line-rate').value,
+            qty: Number(tr.querySelector('.line-qty').value),
+            rate: Number(tr.querySelector('.line-rate').value),
+            row: tr
+          };
+        });
+      }
+
+      function refreshTotals() {
+        var taxRate = NX.getSettings().taxRate;
+        var lines = readLines().map(function (l) {
+          var qty = isFinite(l.qty) ? l.qty : 0;
+          var rate = isFinite(l.rate) ? l.rate : 0;
+          l.row.querySelector('.line-amount').textContent = NX.money(NX.round2(qty * rate));
+          return { qty: qty, rate: rate };
+        });
+        var t = calc(lines, taxRate);
+        document.getElementById('subtotal').textContent = NX.money(t.subtotal);
+        document.getElementById('tax-label').textContent = 'Tax (' + taxRate + '%)';
+        document.getElementById('tax-amount').textContent = NX.money(t.tax);
+        document.getElementById('total').textContent = NX.money(t.total);
+        var rows = linesEl.querySelectorAll('tr');
+        Array.prototype.forEach.call(rows, function (tr) {
+          tr.querySelector('.line-remove').disabled = rows.length === 1;
+        });
+      }
+
+      function openDialog() {
+        var list = customers();
+        customerEl.innerHTML = '<option value="">Select customer</option>' + list.map(function (c) {
+          return '<option value="' + NX.esc(c.id) + '">' + NX.esc(c.name) + '</option>';
+        }).join('');
+        issueEl.value = NX.today();
+        dueEl.value = NX.addDays(NX.today(), 14);
+        linesEl.innerHTML = '';
+        linesEl.appendChild(lineRow(null));
+        errorEl.textContent = '';
+        refreshTotals();
+        dialog.showModal();
+      }
+
+      document.getElementById('create-invoice-btn').addEventListener('click', openDialog);
+      document.getElementById('invoice-cancel').addEventListener('click', function () { dialog.close(); });
+      document.getElementById('add-line-btn').addEventListener('click', function () {
+        linesEl.appendChild(lineRow(null));
+        refreshTotals();
+      });
+      linesEl.addEventListener('input', refreshTotals);
+      linesEl.addEventListener('click', function (e) {
+        var btn = e.target.closest('.line-remove');
+        if (!btn || btn.disabled) return;
+        btn.closest('tr').remove();
+        refreshTotals();
+      });
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        errorEl.textContent = '';
+        function fail(message) { errorEl.textContent = message; }
+
+        var customerId = customerEl.value;
+        if (!customerId) return fail('Select a customer');
+        if (!issueEl.value) return fail('Issue date is required');
+        if (!dueEl.value) return fail('Due date is required');
+        if (dueEl.value < issueEl.value) return fail('Due date cannot be before the issue date');
+
+        var lines = readLines();
+        for (var n = 0; n < lines.length; n++) {
+          var l = lines[n];
+          if (!l.description) return fail('Each line needs a description');
+          if (!Number.isInteger(l.qty) || l.qty <= 0) return fail('Quantity must be a whole number greater than 0');
+          if (l.rateRaw === '') return fail('Rate is required');
+          if (!isFinite(l.rate) || l.rate < 0) return fail('Rate cannot be negative');
+        }
+
+        var taxRate = NX.getSettings().taxRate;
+        var cleanLines = lines.map(function (l) { return { description: l.description, qty: l.qty, rate: l.rate }; });
+        var totals = calc(cleanLines, taxRate);
+        var seq = NX.read(NX.KEYS.nextInvoice, invoices().length + 1);
+        var id = 'INV-' + String(seq).padStart(4, '0');
+
+        var list = invoices();
+        list.push({
+          id: id, customerId: customerId, issueDate: issueEl.value, dueDate: dueEl.value,
+          lines: cleanLines, subtotal: totals.subtotal, taxRate: taxRate, tax: totals.tax,
+          total: totals.total, status: 'Draft', payments: []
+        });
+        saveInvoices(list);
+        NX.write(NX.KEYS.nextInvoice, seq + 1);
+        dialog.close();
+        NX.toast('Invoice ' + id + ' saved as draft');
+        render();
+      });
+
+      /* ---------- row actions ---------- */
+      body.addEventListener('click', function (e) {
+        var btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        var id = btn.closest('tr').getAttribute('data-id');
+        var action = btn.getAttribute('data-action');
+        var list = invoices();
+        var inv = list.filter(function (i) { return i.id === id; })[0];
+        if (!inv) return;
+
+        if (action === 'send') {
+          inv.status = 'Sent';
+          saveInvoices(list);
+          NX.toast('Invoice ' + id + ' sent');
+          render();
+        } else if (action === 'pay') {
+          NX.confirm('Mark invoice ' + id + ' as paid?', 'Mark as paid').then(function (ok) {
+            if (!ok) return;
+            inv.status = 'Paid';
+            inv.paidDate = NX.today();
+            saveInvoices(list);
+            NX.toast('Invoice ' + id + ' marked as paid');
+            render();
+          });
+        } else if (action === 'delete') {
+          NX.confirm('Delete draft invoice ' + id + '?', 'Delete').then(function (ok) {
+            if (!ok) return;
+            saveInvoices(list.filter(function (i) { return i.id !== id; }));
+            NX.toast('Invoice ' + id + ' deleted');
+            render();
+          });
+        }
+      });
+
+      search.addEventListener('input', render);
+      statusFilter.addEventListener('change', render);
+      render();
+    })();
+  </script>
+</body>
+</html>

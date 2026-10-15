@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard - NexusOps Billing</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main">
+      <header class="topbar" id="topbar"></header>
+      <main class="content">
+        <div class="page-head">
+          <h1>Dashboard</h1>
+          <a class="btn btn-primary" href="invoices.html" id="quick-invoice">Create an invoice</a>
+        </div>
+
+        <section class="cards" aria-label="Summary">
+          <div class="card"><div class="label">Customers</div><div class="value" id="stat-customers">0</div></div>
+          <div class="card"><div class="label">Open invoices</div><div class="value" id="stat-open">0</div></div>
+          <div class="card"><div class="label">Outstanding amount</div><div class="value" id="stat-outstanding">$0.00</div></div>
+          <div class="card"><div class="label">Paid this month</div><div class="value" id="stat-paid">$0.00</div></div>
+        </section>
+
+        <section class="panel">
+          <h2>Recent invoices</h2>
+          <table id="recent-invoices">
+            <thead>
+              <tr><th>Number</th><th>Customer</th><th>Due date</th><th class="num">Total</th><th>Status</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="assets/js/app.js"></script>
+  <script>
+    (function () {
+      if (!NX.mountShell('dashboard')) return;
+
+      var customers = NX.read(NX.KEYS.customers, []);
+      var invoices = NX.read(NX.KEYS.invoices, []);
+      var month = NX.today().slice(0, 7);
+
+      // Open = sent but not yet paid. Outstanding = total value of those invoices.
+      var open = invoices.filter(function (i) { return i.status === 'Sent'; });
+      var outstanding = open.reduce(function (sum, i) { return sum + i.total; }, 0);
+      var paidThisMonth = invoices
+        .filter(function (i) { return i.status === 'Paid' && (i.paidDate || '').slice(0, 7) === month; })
+        .reduce(function (sum, i) { return sum + i.total; }, 0);
+
+      document.getElementById('stat-customers').textContent = customers.length;
+      document.getElementById('stat-open').textContent = open.length;
+      document.getElementById('stat-outstanding').textContent = NX.money(NX.round2(outstanding));
+      document.getElementById('stat-paid').textContent = NX.money(NX.round2(paidThisMonth));
+
+      var names = {};
+      customers.forEach(function (c) { names[c.id] = c.name; });
+      var body = document.querySelector('#recent-invoices tbody');
+      var recent = invoices.slice().reverse().slice(0, 5);
+      if (!recent.length) {
+        body.innerHTML = '<tr><td colspan="5" class="empty">No invoices yet</td></tr>';
+      } else {
+        body.innerHTML = recent.map(function (i) {
+          return '<tr><td>' + NX.esc(i.id) + '</td><td>' + NX.esc(names[i.customerId] || '-') + '</td><td>' +
+            NX.esc(i.dueDate) + '</td><td class="num">' + NX.money(i.total) + '</td><td>' +
+            NX.badge(NX.effectiveStatus(i)) + '</td></tr>';
+        }).join('');
+      }
+    })();
+  </script>
+</body>
+</html>

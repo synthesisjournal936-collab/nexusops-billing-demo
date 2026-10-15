@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in - NexusOps Billing</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body class="login-body">
+  <main class="login-card">
+    <h1>NexusOps Billing</h1>
+    <p class="muted">Sign in to manage customers and invoices</p>
+
+    <form id="login-form" novalidate>
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="username" placeholder="you@company.com">
+        <span class="field-error" id="email-error" role="alert"></span>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password">
+        <span class="field-error" id="password-error" role="alert"></span>
+      </div>
+      <label class="check"><input id="remember" type="checkbox" checked> Remember me</label>
+      <p id="form-error" class="form-error" role="alert"></p>
+      <button id="login-btn" class="btn btn-primary" type="submit">Sign in</button>
+    </form>
+  </main>
+
+  <script src="assets/js/app.js"></script>
+  <script>
+    (function () {
+      if (NX.getSession()) { location.replace('dashboard.html'); return; }
+      NX.seed();
+
+      var form = document.getElementById('login-form');
+      var emailEl = document.getElementById('email');
+      var passEl = document.getElementById('password');
+      var rememberEl = document.getElementById('remember');
+      var emailErr = document.getElementById('email-error');
+      var passErr = document.getElementById('password-error');
+      var formErr = document.getElementById('form-error');
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        emailErr.textContent = ''; passErr.textContent = ''; formErr.textContent = '';
+
+        var lockUntil = NX.read(NX.KEYS.lock, 0);
+        if (lockUntil > Date.now()) {
+          formErr.textContent = 'Too many failed attempts. Try again in ' + Math.ceil((lockUntil - Date.now()) / 1000) + ' seconds.';
+          return;
+        }
+
+        var email = emailEl.value.trim();
+        var password = passEl.value;
+        var bad = false;
+        if (!email) { emailErr.textContent = 'Email is required'; bad = true; }
+        else if (!NX.EMAIL_RE.test(email)) { emailErr.textContent = 'Enter a valid email address'; bad = true; }
+        if (!password) { passErr.textContent = 'Password is required'; bad = true; }
+        if (bad) return;
+
+        if (email.toLowerCase() === NX.DEMO.email && password === NX.DEMO.password) {
+          NX.write(NX.KEYS.fails, 0);
+          NX.setSession({ email: NX.DEMO.email, name: NX.DEMO.name }, rememberEl.checked);
+          location.href = 'dashboard.html';
+          return;
+        }
+
+        // Same message for an unknown email and a wrong password.
+        var fails = NX.read(NX.KEYS.fails, 0) + 1;
+        if (fails >= 5) {
+          NX.write(NX.KEYS.fails, 0);
+          NX.write(NX.KEYS.lock, Date.now() + 30000);
+          formErr.textContent = 'Too many failed attempts. Try again in 30 seconds.';
+        } else {
+          NX.write(NX.KEYS.fails, fails);
+          formErr.textContent = 'Invalid email or password';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
