@@ -225,8 +225,7 @@
         errorEl.textContent = '';
         function fail(message) { errorEl.textContent = message; }
 
-        var customerId = customerEl.value;
-        if (!customerId) return fail('Select a customer');
+        var customerId = customerEl.value; // customer is optional now
         if (!issueEl.value) return fail('Issue date is required');
         if (!dueEl.value) return fail('Due date is required');
         if (dueEl.value < issueEl.value) return fail('Due date cannot be before the issue date');
