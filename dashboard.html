@@ -46,9 +46,13 @@
       var invoices = NX.read(NX.KEYS.invoices, []);
       var month = NX.today().slice(0, 7);
 
-      // Open = sent but not yet paid. Outstanding = total value of those invoices.
-      var open = invoices.filter(function (i) { return i.status === 'Sent'; });
-      var outstanding = open.reduce(function (sum, i) { return sum + i.total; }, 0);
+      // Open = sent or partially paid. Outstanding = what is still owed on them.
+      function owed(i) {
+        var paid = (i.payments || []).reduce(function (sum, p) { return sum + p.amount; }, 0);
+        return NX.round2(i.total - paid);
+      }
+      var open = invoices.filter(function (i) { return i.status === 'Sent' || i.status === 'Partially Paid'; });
+      var outstanding = open.reduce(function (sum, i) { return sum + owed(i); }, 0);
       var paidThisMonth = invoices
         .filter(function (i) { return i.status === 'Paid' && (i.paidDate || '').slice(0, 7) === month; })
         .reduce(function (sum, i) { return sum + i.total; }, 0);
