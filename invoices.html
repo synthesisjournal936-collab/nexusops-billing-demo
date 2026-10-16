@@ -61,7 +61,7 @@
 
       <table class="lines">
         <thead>
-          <tr><th>Description</th><th style="width:90px">Qty</th><th style="width:120px">Rate</th><th class="num" style="width:110px">Amount</th><th style="width:80px"></th></tr>
+          <tr><th>Description <span style="color:var(--danger)">*</span></th><th style="width:90px">Qty <span style="color:var(--danger)">*</span></th><th style="width:120px">Rate <span style="color:var(--danger)">*</span></th><th class="num" style="width:110px">Amount</th><th style="width:80px"></th></tr>
         </thead>
         <tbody id="line-items"></tbody>
       </table>
@@ -232,16 +232,14 @@
         if (dueEl.value < issueEl.value) return fail('Due date cannot be before the issue date');
 
         var lines = readLines();
-        for (var n = 0; n < lines.length; n++) {
-          var l = lines[n];
-          if (!l.description) return fail('Each line needs a description');
-          if (!Number.isInteger(l.qty) || l.qty <= 0) return fail('Quantity must be a whole number greater than 0');
-          if (l.rateRaw === '') return fail('Rate is required');
-          if (!isFinite(l.rate) || l.rate < 0) return fail('Rate cannot be negative');
-        }
-
         var taxRate = NX.getSettings().taxRate;
-        var cleanLines = lines.map(function (l) { return { description: l.description, qty: l.qty, rate: l.rate }; });
+        var cleanLines = lines.map(function (l) {
+          return {
+            description: l.description,
+            qty: isFinite(l.qty) ? l.qty : 0,
+            rate: isFinite(l.rate) ? l.rate : 0
+          };
+        });
         var totals = calc(cleanLines, taxRate);
         var seq = NX.read(NX.KEYS.nextInvoice, invoices().length + 1);
         var id = 'INV-' + String(seq).padStart(4, '0');
