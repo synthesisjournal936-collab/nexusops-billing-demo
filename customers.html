@@ -23,7 +23,7 @@
 
         <table id="customer-table">
           <thead>
-            <tr><th>Name</th><th>Email</th><th>Phone</th><th class="num">Invoices</th><th>Actions</th></tr>
+            <tr><th>Name</th><th>Email</th><th>Phone</th><th>Tax ID</th><th class="num">Invoices</th><th>Actions</th></tr>
           </thead>
           <tbody></tbody>
         </table>
@@ -48,6 +48,11 @@
         <label for="customer-phone">Phone</label>
         <input id="customer-phone" name="phone" type="text" autocomplete="off">
       </div>
+      <div class="field">
+        <label for="customer-taxid">Tax ID</label>
+        <input id="customer-taxid" name="taxId" type="text" autocomplete="off" placeholder="TX-123456">
+        <span class="field-error" id="customer-taxid-error" role="alert"></span>
+      </div>
       <div class="dialog-actions">
         <button type="button" class="btn" id="customer-cancel">Cancel</button>
         <button type="submit" class="btn btn-primary" id="customer-save">Save customer</button>
@@ -65,6 +70,9 @@
       var nameEl = document.getElementById('customer-name');
       var emailEl = document.getElementById('customer-email');
       var phoneEl = document.getElementById('customer-phone');
+      var taxEl = document.getElementById('customer-taxid');
+      var taxErr = document.getElementById('customer-taxid-error');
+      var TAX_RE = /^TX-\d{6}$/i;
       var nameErr = document.getElementById('customer-name-error');
       var emailErr = document.getElementById('customer-email-error');
       var title = document.getElementById('customer-dialog-title');
@@ -83,7 +91,7 @@
           return !q || c.name.toLowerCase().indexOf(q) !== -1 || c.email.toLowerCase().indexOf(q) !== -1;
         });
         if (!rows.length) {
-          body.innerHTML = '<tr><td colspan="5" class="empty">No customers found</td></tr>';
+          body.innerHTML = '<tr><td colspan="6" class="empty">No customers found</td></tr>';
           return;
         }
         body.innerHTML = rows.map(function (c) {
@@ -91,6 +99,7 @@
             '<td>' + NX.esc(c.name) + '</td>' +
             '<td>' + NX.esc(c.email) + '</td>' +
             '<td>' + NX.esc(c.phone || '-') + '</td>' +
+            '<td>' + NX.esc(c.taxId || '-') + '</td>' +
             '<td class="num">' + (counts[c.id] || 0) + '</td>' +
             '<td><div class="actions">' +
             '<button type="button" class="btn btn-sm" data-action="edit">Edit</button>' +
@@ -105,7 +114,8 @@
         nameEl.value = customer ? customer.name : '';
         emailEl.value = customer ? customer.email : '';
         phoneEl.value = customer ? (customer.phone || '') : '';
-        nameErr.textContent = ''; emailErr.textContent = '';
+        taxEl.value = customer ? (customer.taxId || '') : '';
+        nameErr.textContent = ''; emailErr.textContent = ''; taxErr.textContent = '';
         dialog.showModal();
         nameEl.focus();
       }
@@ -116,10 +126,11 @@
 
       form.addEventListener('submit', function (e) {
         e.preventDefault();
-        nameErr.textContent = ''; emailErr.textContent = '';
+        nameErr.textContent = ''; emailErr.textContent = ''; taxErr.textContent = '';
         var name = nameEl.value.trim();
         var email = emailEl.value.trim();
         var phone = phoneEl.value.trim();
+        var taxId = taxEl.value.trim().toUpperCase();
         var bad = false;
 
         if (!name) { nameErr.textContent = 'Customer name is required'; bad = true; }
@@ -128,15 +139,17 @@
         else if (customers().some(function (c) { return c.email.toLowerCase() === email.toLowerCase() && c.id !== editingId; })) {
           emailErr.textContent = 'A customer with this email already exists'; bad = true;
         }
+        if (!taxId) { taxErr.textContent = 'Tax ID is required'; bad = true; }
+        else if (!TAX_RE.test(taxId)) { taxErr.textContent = 'Tax ID must look like TX-123456'; bad = true; }
         if (bad) return;
 
         var list = customers();
         if (editingId) {
-          list = list.map(function (c) { return c.id === editingId ? { id: c.id, name: name, email: email, phone: phone } : c; });
+          list = list.map(function (c) { return c.id === editingId ? { id: c.id, name: name, email: email, phone: phone, taxId: taxId } : c; });
           NX.toast('Customer updated');
         } else {
           var next = list.reduce(function (m, c) { return Math.max(m, parseInt(c.id.slice(2), 10) || 0); }, 0) + 1;
-          list.push({ id: 'C-' + String(next).padStart(3, '0'), name: name, email: email, phone: phone });
+          list.push({ id: 'C-' + String(next).padStart(3, '0'), name: name, email: email, phone: phone, taxId: taxId });
           NX.toast('Customer added');
         }
         NX.write(NX.KEYS.customers, list);

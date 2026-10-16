@@ -58,8 +58,8 @@
   function seed() {
     if (read(KEYS.customers, null) === null) {
       write(KEYS.customers, [
-        { id: 'C-001', name: 'Acme Corp', email: 'billing@acme.test', phone: '+1 555 0101' },
-        { id: 'C-002', name: 'Globex Ltd', email: 'accounts@globex.test', phone: '+1 555 0102' }
+        { id: 'C-001', name: 'Acme Corp', email: 'billing@acme.test', phone: '+1 555 0101', taxId: 'TX-100001' },
+        { id: 'C-002', name: 'Globex Ltd', email: 'accounts@globex.test', phone: '+1 555 0102', taxId: 'TX-100002' }
       ]);
     }
     if (read(KEYS.settings, null) === null) {
