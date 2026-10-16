@@ -255,7 +255,6 @@
         saveInvoices(list);
         NX.write(NX.KEYS.nextInvoice, seq + 1);
         dialog.close();
-        NX.toast('Invoice ' + id + ' saved as draft');
         render();
       });
 
