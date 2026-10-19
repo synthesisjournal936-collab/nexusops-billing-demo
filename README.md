@@ -10,6 +10,7 @@ It has no server: pages are plain HTML/JS and all data lives in the browser's lo
 | Sign in | `login.html` | Email + password, "Remember me" |
 | Dashboard | `dashboard.html` | Customer count, open invoices, outstanding amount, paid this month, recent invoices |
 | Customers | `customers.html` | Add, edit, delete, search |
+| Products | `products.html` | Add, edit, delete, search; SKU format and unique rule |
 | Invoices | `invoices.html` | Create (with line items), send, mark as paid, delete drafts, filter |
 | Settings | `settings.html` | Company name, tax rate, currency, reset demo data |
 

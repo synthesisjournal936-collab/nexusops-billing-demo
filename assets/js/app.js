@@ -10,6 +10,7 @@
     session: P + 'session',
     customers: P + 'customers',
     invoices: P + 'invoices',
+    products: P + 'products',
     settings: P + 'settings',
     nextInvoice: P + 'next_invoice',
     fails: P + 'login_fails',
@@ -62,6 +63,12 @@
         { id: 'C-002', name: 'Globex Ltd', email: 'accounts@globex.test', phone: '+1 555 0102', taxId: 'TX-100002' }
       ]);
     }
+    if (read(KEYS.products, null) === null) {
+      write(KEYS.products, [
+        { id: 'P-001', name: 'Standard Support Plan', sku: 'SUP-001', price: 49, active: true },
+        { id: 'P-002', name: 'Onboarding Package', sku: 'ONB-001', price: 250, active: true }
+      ]);
+    }
     if (read(KEYS.settings, null) === null) {
       write(KEYS.settings, { company: 'NexusOps Ltd', taxRate: 10, currency: 'USD' });
     }
@@ -76,7 +83,7 @@
     }
   }
   function resetDemoData() {
-    [KEYS.customers, KEYS.invoices, KEYS.settings, KEYS.nextInvoice].forEach(function (k) {
+    [KEYS.customers, KEYS.invoices, KEYS.products, KEYS.settings, KEYS.nextInvoice].forEach(function (k) {
       try { localStorage.removeItem(k); } catch (e) { /* ignore */ }
     });
     seed();
@@ -160,6 +167,7 @@
   var NAV = [
     ['dashboard', 'Dashboard', 'dashboard.html'],
     ['customers', 'Customers', 'customers.html'],
+    ['products', 'Products', 'products.html'],
     ['invoices', 'Invoices', 'invoices.html'],
     ['settings', 'Settings', 'settings.html']
   ];

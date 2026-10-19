@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Products - NexusOps Billing</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main">
+      <header class="topbar" id="topbar"></header>
+      <main class="content">
+        <div class="page-head">
+          <h1>Products</h1>
+          <button type="button" class="btn btn-primary" id="add-product-btn">Add Product</button>
+        </div>
+
+        <div class="toolbar">
+          <input type="search" id="product-search" placeholder="Search products" aria-label="Search products">
+        </div>
+
+        <table id="product-table">
+          <thead>
+            <tr><th>Name</th><th>SKU</th><th class="num">Unit price</th><th>Status</th><th>Actions</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </main>
+    </div>
+  </div>
+
+  <dialog id="product-dialog" aria-labelledby="product-dialog-title">
+    <h2 id="product-dialog-title">Add product</h2>
+    <form id="product-form" novalidate>
+      <div class="field">
+        <label for="product-name">Product name</label>
+        <input id="product-name" name="name" type="text" autocomplete="off">
+        <span class="field-error" id="product-name-error" role="alert"></span>
+      </div>
+      <div class="field">
+        <label for="product-sku">SKU</label>
+        <input id="product-sku" name="sku" type="text" autocomplete="off" placeholder="ABC-123">
+        <span class="field-error" id="product-sku-error" role="alert"></span>
+      </div>
+      <div class="field">
+        <label for="product-price">Unit price</label>
+        <input id="product-price" name="price" type="number" step="0.01" autocomplete="off">
+        <span class="field-error" id="product-price-error" role="alert"></span>
+      </div>
+      <label class="check"><input id="product-active" type="checkbox" checked> Active</label>
+      <div class="dialog-actions">
+        <button type="button" class="btn" id="product-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="product-save">Save product</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="assets/js/app.js"></script>
+  <script>
+    (function () {
+      if (!NX.mountShell('products')) return;
+
+      var SKU_RE = /^[A-Z]{3}-\d{3}$/i;
+      var MAX_PRICE = 1000000;
+      var dialog = document.getElementById('product-dialog');
+      var form = document.getElementById('product-form');
+      var nameEl = document.getElementById('product-name');
+      var skuEl = document.getElementById('product-sku');
+      var priceEl = document.getElementById('product-price');
+      var activeEl = document.getElementById('product-active');
+      var nameErr = document.getElementById('product-name-error');
+      var skuErr = document.getElementById('product-sku-error');
+      var priceErr = document.getElementById('product-price-error');
+      var title = document.getElementById('product-dialog-title');
+      var search = document.getElementById('product-search');
+      var body = document.querySelector('#product-table tbody');
+      var editingId = null;
+
+      function products() { return NX.read(NX.KEYS.products, []); }
+
+      function clearErrors() { nameErr.textContent = ''; skuErr.textContent = ''; priceErr.textContent = ''; }
+
+      function render() {
+        var q = search.value.trim().toLowerCase();
+        var rows = products().filter(function (p) {
+          return !q || p.name.toLowerCase().indexOf(q) !== -1 || p.sku.toLowerCase().indexOf(q) !== -1;
+        });
+        if (!rows.length) {
+          body.innerHTML = '<tr><td colspan="5" class="empty">No products found</td></tr>';
+          return;
+        }
+        body.innerHTML = rows.map(function (p) {
+          return '<tr data-id="' + NX.esc(p.id) + '">' +
+            '<td>' + NX.esc(p.name) + '</td>' +
+            '<td>' + NX.esc(p.sku) + '</td>' +
+            '<td class="num">' + NX.money(p.price) + '</td>' +
+            '<td>' + (p.active ? 'Active' : 'Inactive') + '</td>' +
+            '<td><div class="actions">' +
+            '<button type="button" class="btn btn-sm" data-action="edit">Edit</button>' +
+            '<button type="button" class="btn btn-sm btn-danger" data-action="delete">Delete</button>' +
+            '</div></td></tr>';
+        }).join('');
+      }
+
+      function openDialog(product) {
+        editingId = product ? product.id : null;
+        title.textContent = product ? 'Edit product' : 'Add product';
+        nameEl.value = product ? product.name : '';
+        skuEl.value = product ? product.sku : '';
+        priceEl.value = product ? product.price : '';
+        activeEl.checked = product ? !!product.active : true;
+        clearErrors();
+        dialog.showModal();
+        nameEl.focus();
+      }
+
+      document.getElementById('add-product-btn').addEventListener('click', function () { openDialog(null); });
+      document.getElementById('product-cancel').addEventListener('click', function () { dialog.close(); });
+      search.addEventListener('input', render);
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        clearErrors();
+        var name = nameEl.value.trim();
+        var sku = skuEl.value.trim().toUpperCase();
+        var priceRaw = priceEl.value.trim();
+        var price = Number(priceRaw);
+        var bad = false;
+
+        if (!name) { nameErr.textContent = 'Product name is required'; bad = true; }
+
+        if (!sku) { skuErr.textContent = 'SKU is required'; bad = true; }
+        else if (!SKU_RE.test(sku)) { skuErr.textContent = 'SKU must look like ABC-123'; bad = true; }
+        else if (products().some(function (p) { return p.sku === sku && p.id !== editingId; })) {
+          skuErr.textContent = 'A product with this SKU already exists'; bad = true;
+        }
+
+        if (priceRaw === '') { priceErr.textContent = 'Unit price is required'; bad = true; }
+        else if (!isFinite(price) || price < 0) { priceErr.textContent = 'Unit price cannot be negative'; bad = true; }
+        else if (price > MAX_PRICE) { priceErr.textContent = 'Unit price cannot exceed 1,000,000'; bad = true; }
+
+        if (bad) return;
+
+        var list = products();
+        var record = { name: name, sku: sku, price: NX.round2(price), active: activeEl.checked };
+        if (editingId) {
+          list = list.map(function (p) { return p.id === editingId ? Object.assign({ id: p.id }, record) : p; });
+          NX.toast('Product updated');
+        } else {
+          var next = list.reduce(function (m, p) { return Math.max(m, parseInt(p.id.slice(2), 10) || 0); }, 0) + 1;
+          list.push(Object.assign({ id: 'P-' + String(next).padStart(3, '0') }, record));
+          NX.toast('Product added');
+        }
+        NX.write(NX.KEYS.products, list);
+        dialog.close();
+        render();
+      });
+
+      body.addEventListener('click', function (e) {
+        var btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        var id = btn.closest('tr').getAttribute('data-id');
+        var product = products().filter(function (p) { return p.id === id; })[0];
+        if (!product) return;
+
+        if (btn.getAttribute('data-action') === 'edit') { openDialog(product); return; }
+
+        NX.confirm('Delete product "' + product.name + '"?', 'Delete').then(function (ok) {
+          if (!ok) return;
+          NX.write(NX.KEYS.products, products().filter(function (p) { return p.id !== id; }));
+          NX.toast('Product deleted');
+          render();
+        });
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>
