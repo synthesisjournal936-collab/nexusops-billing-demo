@@ -14,7 +14,10 @@
       <main class="content">
         <div class="page-head">
           <h1>Invoices</h1>
-          <button type="button" class="btn btn-primary" id="create-invoice-btn">Create Invoice</button>
+          <div class="actions">
+            <button type="button" class="btn" id="export-invoices-btn">Export CSV</button>
+            <button type="button" class="btn btn-primary" id="create-invoice-btn">Create Invoice</button>
+          </div>
         </div>
 
         <div class="toolbar">
@@ -147,6 +150,45 @@
             '<td>' + actionsFor(i, status) + '</td></tr>';
         }).join('');
       }
+
+      /* ---------- export to CSV ---------- */
+      function csvCell(value) {
+        var text = String(value == null ? '' : value);
+        // Spreadsheet formula injection guard: a leading = + - @ is shown as text.
+        if (/^[=+\-@]/.test(text)) text = "'" + text;
+        return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+      }
+
+      function visibleInvoices() {
+        var names = {};
+        customers().forEach(function (c) { names[c.id] = c.name; });
+        var q = search.value.trim().toLowerCase();
+        var wanted = statusFilter.value;
+        return invoices().slice().reverse().filter(function (i) {
+          var status = NX.effectiveStatus(i);
+          var text = (i.id + ' ' + (names[i.customerId] || '')).toLowerCase();
+          return (!wanted || status === wanted) && (!q || text.indexOf(q) !== -1);
+        }).map(function (i) {
+          return [i.id, names[i.customerId] || '-', i.issueDate, i.dueDate, i.total.toFixed(2), NX.effectiveStatus(i)];
+        });
+      }
+
+      document.getElementById('export-invoices-btn').addEventListener('click', function () {
+        var rows = visibleInvoices();
+        if (!rows.length) { NX.toast('No invoices to export', 'error'); return; }
+        var lines = [['Number', 'Customer', 'Issue date', 'Due date', 'Total', 'Status']].concat(rows)
+          .map(function (r) { return r.map(csvCell).join(','); });
+        var blob = new Blob([lines.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'invoices-' + NX.today() + '.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+        NX.toast('Exported ' + rows.length + (rows.length === 1 ? ' invoice' : ' invoices'));
+      });
 
       /* ---------- create-invoice dialog ---------- */
       function lineRow(line) {
